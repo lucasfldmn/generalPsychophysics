@@ -33,17 +33,24 @@ orientation = 0;
 % set size in degreeperpixel
 degreeSize = 10;
 degreePerPixelSize = lf_calculateSize(23, 60, 10);
+% set number of trials
+numberOfTrials = 40;
+% set number of pre trials
+numberOfPreTrials = 10;
 % generate left or right condition vector (1=right, 0=left)
-numberOfTrials = 40; 
-trialMatrix = round(rand(1,numberOfTrials));
-%% Set QUEST parameters
-tGuess=log10(0.05);
-tGuessSd=10;
-pThreshold=0.82;
-beta=3.5;delta=0.01;gamma=0.5;grain=0.01;range=8;
-q=QuestCreate(tGuess,tGuessSd,pThreshold,beta,delta,gamma,grain,range);
-q.normalizePdf=1; % This adds a few ms per call to QuestUpdate, but otherwise the pdf will underflow after about 1000 trials.
-%% Main trial procedure
+trialMatrix = round(rand(1,numberOfTrials+numberOfPreTrials));
+% guess contrast threshhold (numeric scale, e.g. 0.05)
+initialContrastGuess = 0.05;
+% guess contrast sd (log scale, e.g. 10)
+initialContrastSd = 10;
+%% Set pre QUEST parameters
+tGuesspre=log10(initialContrastGuess);
+tGuessSdpre=initialContrastSd;
+pThresholdpre=0.82;
+betapre=3.5;deltapre=0.01;gammapre=0.5;grainpre=0.1;rangepre=8;
+qpre=QuestCreate(tGuesspre,tGuessSdpre,pThresholdpre,betapre,deltapre,gammapre,grainpre,rangepre);
+qpre.normalizePdf=1; % This adds a few ms per call to QuestUpdate, but otherwise the pdf will underflow after about 1000 trials.
+%% Pre trial procedure
 % Open the screen
 [window, windowRect] = PsychImaging('OpenWindow', screenNumber, midgray, [], 32, [],... 
     [], []);
@@ -70,6 +77,74 @@ KbName('UnifyKeyNames');
 escapeKey = KbName('ESCAPE');
 leftKey = KbName('LeftArrow');
 rightKey = KbName('RightArrow');
+% loop through trial conditions
+for i = 1:numberOfPreTrials
+    % Set new contrast using QuestMean as recommended by King-Smith et al. (1994)
+    contrastLog = QuestMean(qpre);
+    trialMatrix(6,i) = contrastLog;
+    contrast = 10^contrastLog;
+    % Restrict contrast to 0-1 range - shouldnt be needed but is here for
+    % additional safety
+    contrast=max(0,min(1,contrast));
+    % Calculate grating and gabor pixel matrix
+    grating = mb_compoundCircularGrating_V3('shape','disk','envelope','gauss','or',orientation,'sf',1,'phase',0,'co',contrast,'noise',0,'degreeperpixel',degreePerPixelSize,'radius',degreeSize/2);
+    gaborMatrix = round((midgray+inc*grating)*256);
+    % show gabor depending on condition
+    if trialMatrix(1,i)==1
+        lf_showGaborOnScreen(gaborMatrix, destRectRight)
+    else 
+        lf_showGaborOnScreen(gaborMatrix, destRectLeft)
+    end
+    startTime = GetSecs;
+    [sec , keyCode, deltaSecs] = KbWait;  
+    rt = GetSecs - startTime;
+    if keyCode(leftKey)
+        % gabor detected on left side
+        trialMatrix(2,i) = 0;
+        trialMatrix(3,i) = rt*1000;
+    elseif keyCode(rightKey)
+        % gabor detected on right side
+        trialMatrix(2,i) = 1;
+        trialMatrix(3,i) = rt*1000;
+    elseif keyCode(escapeKey)
+        % exit 
+        disp('***Experiment terminated.***');
+        break;
+    else
+        % different key press, trial invalid
+        trialMatrix(2,i) = invalidTrialCode;
+    end    
+    % remove gabor and display fixation cross for one second
+    % no exiting prossible during this timeframe -> might have to be
+    % changed
+    lf_showFixationCrossOnScreen(40,5,black, [xCenter, yCenter]);   
+    WaitSecs(1);
+    % write current contrast to cond
+    trialMatrix(4,i) = contrast;    
+    % Update QUEST pdf function and set new contrast using QuestMean as recommended by King-Smith et al. (1994)
+    if trialMatrix(2,i)==invalidTrialCode
+    elseif trialMatrix(1,i)==trialMatrix(2,i)
+        response = 1;
+        qpre=QuestUpdate(qpre,log10(contrast),response);
+    else        
+        response = 0;   
+        qpre=QuestUpdate(qpre,log10(contrast),response);
+    end    
+end
+%% Pre-main operations
+% Ask Quest for the final estimate of threshold.
+tpre=QuestMean(qpre);
+copre=10^tpre;
+sdpre=QuestSd(qpre);
+fprintf('Preliminary contrast threshhold estimate (mean+-sd) is %.5f +- %.5f\n',copre,sdpre);
+%% Set main QUEST parameters
+tGuess=tpre;
+tGuessSd=initialContrastSd;
+pThreshold=0.82;
+beta=3.5;delta=0.01;gamma=0.5;grain=0.01;range=10;
+q=QuestCreate(tGuess,tGuessSd,pThreshold,beta,delta,gamma,grain,range);
+q.normalizePdf=1; % This adds a few ms per call to QuestUpdate, but otherwise the pdf will underflow after about 1000 trials.
+%% Main trial procedure
 % loop through trial conditions
 for i = 1:numberOfTrials
     % Set new contrast using QuestMean as recommended by King-Smith et al. (1994)
@@ -113,19 +188,7 @@ for i = 1:numberOfTrials
     lf_showFixationCrossOnScreen(40,5,black, [xCenter, yCenter]);   
     WaitSecs(1);
     % write current contrast to cond
-    trialMatrix(4,i) = contrast;
-    % Set new contrast based on previous trial response (correct = contrast
-    % gets halved, wrong = contrast gets tripled, invalid = contrast stays the same)
-    %if trialMatrix(2,i)==invalidTrialCode
-    %elseif trialMatrix(1,i)==trialMatrix(2,i)
-    %    contrast = contrast/3;
-    %else        
-    %    contrast = contrast*2;
-    %    % attention: contrast must not be greater than 1
-    %     if contrast > 1
-    %        contrast = 1;
-    %    end
-    %end
+    trialMatrix(4,i) = contrast;    
     % Update QUEST pdf function and set new contrast using QuestMean as recommended by King-Smith et al. (1994)
     if trialMatrix(2,i)==invalidTrialCode
     elseif trialMatrix(1,i)==trialMatrix(2,i)
@@ -137,6 +200,7 @@ for i = 1:numberOfTrials
     end    
 end
 sca;
+%% Post-test operations
 % Ask Quest for the final estimate of threshold.
 t=10^QuestMean(q);
 sd=QuestSd(q);
