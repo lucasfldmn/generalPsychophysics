@@ -1,1 +1,1 @@
-# gaborExperiment
+# generalPsychohysics
