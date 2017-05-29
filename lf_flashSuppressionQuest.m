@@ -10,14 +10,16 @@ sca; close all; clear all; clc;
 %% Set global variables
 global window;
 %% Set experiment parameters
+% Side of the stimulus to appear, 0 for left, 1 for right
+side = 0;
 % Path to the frame image
-frameImagePath = ['X:\Mitarbeiter\Chris\MatLab\CFS_Frame.jpg'];
+frameImagePath = 'X:\Mitarbeiter\Chris\MatLab\CFS_Frame.jpg';
 % Path to the image of the first stimulus (e.g. Mondrian)
 firstStimulusImagePath = 'X:\Mitarbeiter\Max\Maxlab\ECG\Components\Stimuli\Mondrian.png';
 % Path to the image of the second stimulus (usually equals the first stimulus)
 secondStimulusImagePath = firstStimulusImagePath;
 % Path to the image of the second stimulus (e.g. Face)
-thirdStimulusImagePath = ['X:\Mitarbeiter\Chris\MatLab\RadboudFaces\radb_002_ang_f_cauc_fr.png'];
+thirdStimulusImagePath = 'X:\Mitarbeiter\Chris\MatLab\RadboudFaces\radb_002_ang_f_cauc_fr.png';
 % Contrast weights for the three stimuli
 % Stimulus 1
 contrastFirstStimulus = 1;
@@ -31,8 +33,12 @@ durationFix = 1;
 durationFirstStimulus = 2;
 % Duration of the seconds stimulus in seconds
 durationSecondStimulus = 0.3;
-% Number of trials
-numberOfTrials = 10;
+% Number of different interstimulus intervals
+numberOfIsi = 7;
+% Number of trials per interstimulus interval
+numberOfTrialsPerIsi = 9;
+% Total number of trials
+numberOfTrials = numberOfIsi * numberOfTrialsPerIsi;
 % Number of pre trials
 numberOfPreTrials = 3;
 % Guess initial threshhold (numeric scale, e.g. 0.05)
@@ -45,6 +51,27 @@ yes = 'y';
 no = 'n';
 % Key for experiment termination
 escape = 'ESCAPE'; 
+%% Generate trial matrix for main procedure
+isi_matrix = zeros(numberOfTrialsPerIsi,numberOfIsi);
+randi([0, 2000], 1,numberOfTrialsPerIsi);
+isi_matrix(:,1) = (randi([0, 2000], 1,9))/1000;
+for i = 2:size(isi_matrix,2)
+    shuffled_block = Shuffle(isi_matrix(:,1));
+    isi_matrix(:,i) = shuffled_block;
+end
+% Details for condition matrix
+logicals = zeros(numberOfTrials,1);
+logicals(1:(round(numberOfTrials/2))) = 1;
+logicals_shuffled = Shuffle(logicals);
+trials = 1:numberOfTrialsPerIsi;
+alltrials = repmat(trials,1,numberOfIsi)';
+A = (1:7);
+repeated = sort(repmat(A, 1,numberOfTrialsPerIsi));
+% Fill final condition matrix
+trialmatrix(:,1) = alltrials;
+trialmatrix(:,2) = repeated;
+trialmatrix(:,3) = isi_matrix(:); % Fügt die Spalten hintereinander
+trialmatrix(:,4) = logicals_shuffled;
 %% Set pre QUEST parameters
 pThresholdpre=0.82; betapre=3.5; deltapre=0.01; gammapre=0.5; grainpre=0.1; rangepre=8;
 qpre=QuestCreate(log10(initialGuess),initialSd,pThresholdpre,betapre,deltapre,gammapre,grainpre,rangepre);
@@ -95,9 +122,8 @@ secondStimTex = Screen(window, 'MakeTexture',secondStim);
 thirdStim = imread(thirdStimulusImagePath);
 % Generate frame coordinates to draw images at
 [s1, s2, s3] = size(frameImage);
-imageRect = [0,0,s2,s1];
 baseRect = [0 0 400 400];
-hori = round([40/100*xCenter]);
+hori = round(40/100*xCenter);
 Xlinks = round(xCenter-hori);
 Xrechts = round (xCenter+hori);
 imageScaleFactor = 0.3;
@@ -120,7 +146,7 @@ for i = 1:numberOfPreTrials
     % Limit intensity to 0-1 range
     intensity=max(0,min(1,intensity));
     % Get response using the new intensity
-    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey);
+    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
     % End if escape has been pressed
     if response == 99        
         break;
@@ -155,11 +181,15 @@ for i = 1:numberOfTrials
     %% Experiment procure 
     % Limit intensity to 0-1 range    
     intensity=max(0,min(1,intensity));
-    % Get response using the new intensity
-    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, yescapeKey, yesKey, noKey);
+    % Set ISI duration based on trial matrix
+    durationFirstStimulus = trialmatrix(i,3);
+    % Set side based on trial matrix
+    side = trialmatrix(i,4);
+    % Get response using the new intensity    
+    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
     % End if escape has been pressed
     if response == 99      
-        disp('***Experiment terminated.***');y
+        disp('***Experiment terminated.***');
         break;
     end
     %% Update quest function with response
