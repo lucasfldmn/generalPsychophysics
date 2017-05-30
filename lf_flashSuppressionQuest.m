@@ -1,4 +1,4 @@
-function [] = lf_flashSuppressionQuest()
+function [trialMatrix] = lf_flashSuppressionQuest()
 %%  Info section
 % ----------------------------------------------------------------------- %
 %   Author: Lucas Feldmann
@@ -34,14 +34,14 @@ durationFix = 1;
 durationFirstStimulus = 2;
 % Duration of the seconds stimulus in seconds
 durationSecondStimulus = 0.5;
-% Total number of trials
+% Number of trials
 numberOfTrials = 50;
 % Number of early trial rounds
 numberOfEarlyTrialRounds = 5;
 % Guess initial threshhold (numeric scale, e.g. 0.05)
-initialGuess = 0.20;
+initialGuess = 0.50;
 % Guess initial sd (log scale, e.g. 10)
-initialSd = 10;
+initialSd = 5;
 % Key for response 'yes'
 yes = 'y';
 % Key for response 'no'
@@ -112,18 +112,34 @@ LeftPosition = CenterRectOnPointd(imageRect, Xlinks, yCenter);
 RightPosition = CenterRectOnPointd(imageRect, Xrechts, yCenter);
 % Set alpha blending
 Screen('BlendFunction', window, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
-%% 
-for i=numberOfEarlyTrialRounds:-1:2
+%% Main experiment
+%% Create matrix to write repsonse and contrast into
+% Get combined number of trials
+totalNumberOfTrials = numberOfTrials + ((numberOfEarlyTrialRounds*numberOfEarlyTrialRounds+numberOfEarlyTrialRounds)/2);
+% Get side conditions
+logicals = zeros(totalNumberOfTrials,1);
+logicals(1:round(totalNumberOfTrials/2)) = 1;
+logicals_shuffled = Shuffle(logicals);
+% Fill trial matrix
+trialMatrix = 1:totalNumberOfTrials;
+trialMatrix(2,:) = logicals_shuffled;
+% Set current trial number
+currentTrial = 1;
+%% Staircase procedure for the first trials to avoid quest failing due to early errors
+for i=numberOfEarlyTrialRounds:-1:1
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
     intensityLog = QuestMean(q);    
     % Convert intenstiy to numeric scale
     intensity = 10^intensityLog;
+    % Limit intensity to 0-1 range
+    intensity=max(0,min(1,intensity));
     % Generate N-up-1-down staircase for suggested intensity 
     % Maximum number of steps in lower intenstity direction are calculated by gaussian sum formula
     % Maximum steps in higher intensity direction = i
-    maxSteps = (i*i+i)/2+i;
+    maxSteps = (i*i+i)/2 + i;
     intensityStaircase = 1:maxSteps;
-    intensityStaircase = intensity/maxSteps.*(maxSteps-intensityStaircase+i+1);
+    stepGrain = intensity/maxSteps;
+    intensityStaircase = stepGrain.*(maxSteps-intensityStaircase+i)
     % Set step on staircase
     activeStep = i;
     % Set count of steps (for correct answers)
@@ -131,9 +147,9 @@ for i=numberOfEarlyTrialRounds:-1:2
     for j=1:i        
         %% Experiment procure     
         % Limit intensity to 0-1 range
-        intensity=max(0,min(1,intensityStaircase(activeStep)));
+        intensity=intensityStaircase(activeStep);
         % Get response using the new intensity
-        response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
+        response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, trialMatrix(2,currentTrial));
         % End if escape has been pressed
         if response == 99        
             break;
@@ -141,12 +157,20 @@ for i=numberOfEarlyTrialRounds:-1:2
         % Go up one step if repsonse is no
         if response == 0        
             activeStep = activeStep - 1;
+            % Reset step size
+            n = 1;
         end   
         % Go up n steps if repsonse is yes
         if response == 1        
             activeStep = activeStep + n;
+            % Increase step size
             n = n + 1;
-        end         
+        end 
+        %% Log results
+        trialMatrix(3,currentTrial) = intensity;
+        trialMatrix(4,currentTrial) = response;
+        %% Trial complete
+        currentTrial = currentTrial + 1;  
     end
     % End if escape has been pressed
     if response == 99        
@@ -172,7 +196,7 @@ for i = 1:numberOfTrials
     % Limit intensity to 0-1 range    
     intensity=max(0,min(1,intensity));   
     % Get response using the new intensity    
-    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
+    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, trialMatrix(2,currentTrial));
     % End if escape has been pressed
     if response == 99      
         disp('***Experiment terminated.***');
@@ -181,7 +205,12 @@ for i = 1:numberOfTrials
     %% Update quest function with response
     % Use the intensity that has actually been used on logarithmic scale 
     % Response is binary (0 for failure, 1 for success)
-    q=QuestUpdate(q,log10(intensity),response);    
+    q=QuestUpdate(q,log10(intensity),response); 
+    %% Log results
+    trialMatrix(3,currentTrial) = intensity;
+    trialMatrix(4,currentTrial) = response;
+    %% Trial complete
+    currentTrial = currentTrial + 1;    
 end
 % Get final estimate of threshold.
 tLog=QuestMean(q);
@@ -218,6 +247,8 @@ function [response] = lf_showFlashSuppressionSequence(intensity, black, duration
 %       escapeKey: Keycode for the key to terminate the experiment
 %       yesKey: Keycode for response 'yes' 
 %       noKey: Keycode for response 'no'
+%       side: logical to determine side of presentation
+%             0 = left, 1=right
 % ----------------------------------------------------------------------- %
 global window        
 %% Show just the empty frames 
