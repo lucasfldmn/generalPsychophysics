@@ -23,9 +23,9 @@ secondStimulusImagePath = firstStimulusImagePath;
 thirdStimulusImagePath = 'X:\Mitarbeiter\Chris\MatLab\RadboudFaces\radb_002_ang_f_cauc_fr.png';
 % Contrast weights for the three stimuli
 % Stimulus 1
-contrastFirstStimulus = 1;
-% Stimulus 2
-contrastSecondStimulus = 1;
+contrastFirstStimulus = 0.8;
+% Stimulus 2 - same contrast for both Mondrian patterns
+contrastSecondStimulus = contrastFirstStimulus;
 % Stimulus 3 - will be variied in the experiment
 % contrastThirdStimulus = 1;
 % Duration of the fixation phase in seconds
@@ -36,8 +36,8 @@ durationFirstStimulus = 2;
 durationSecondStimulus = 0.5;
 % Total number of trials
 numberOfTrials = 50;
-% Number of pre trials
-numberOfPreTrials = 10;
+% Number of early trial rounds
+numberOfEarlyTrialRounds = 5;
 % Guess initial threshhold (numeric scale, e.g. 0.05)
 initialGuess = 0.20;
 % Guess initial sd (log scale, e.g. 10)
@@ -48,11 +48,11 @@ yes = 'y';
 no = 'n';
 % Key for experiment termination
 escape = 'ESCAPE';
-%% Set pre QUEST parameters
-pThresholdpre=0.82; betapre=3.5; deltapre=0.01; gammapre=0.5; grainpre=0.1; rangepre=8;
-qpre=QuestCreate(log10(initialGuess),initialSd,pThresholdpre,betapre,deltapre,gammapre,grainpre,rangepre);
-qpre.normalizePdf=1; % This adds a few ms per call to QuestUpdate, but otherwise the pdf will underflow after about 1000 trials.
 %% Initialize experiment
+% Set QUEST parameters 
+pThreshold=0.82; beta=3.5; delta=0.01; gamma=0.5; grain=0.01; range=10;
+q=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
+q.normalizePdf=1;
 % Set keycodes for keys to press
 KbName('UnifyKeyNames');
 escapeKey = KbName(escape);
@@ -112,42 +112,56 @@ LeftPosition = CenterRectOnPointd(imageRect, Xlinks, yCenter);
 RightPosition = CenterRectOnPointd(imageRect, Xrechts, yCenter);
 % Set alpha blending
 Screen('BlendFunction', window, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
-%% Pre trial QUEST procedure
-for i = 1:numberOfPreTrials
+%% 
+for i=numberOfEarlyTrialRounds:-1:2
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
-    intensityLog = QuestMean(qpre);    
+    intensityLog = QuestMean(q);    
     % Convert intenstiy to numeric scale
     intensity = 10^intensityLog;
-    %% Experiment procure     
-    % Limit intensity to 0-1 range
-    intensity=max(0,min(1,intensity));
-    % Get response using the new intensity
-    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
+    % Generate N-up-1-down staircase for suggested intensity 
+    % Maximum number of steps in lower intenstity direction are calculated by gaussian sum formula
+    % Maximum steps in higher intensity direction = i
+    maxSteps = (i*i+i)/2+i;
+    intensityStaircase = 1:maxSteps;
+    intensityStaircase = intensity/maxSteps.*(maxSteps-intensityStaircase+i+1);
+    % Set step on staircase
+    activeStep = i;
+    % Set count of steps (for correct answers)
+    n = 1;
+    for j=1:i        
+        %% Experiment procure     
+        % Limit intensity to 0-1 range
+        intensity=max(0,min(1,intensityStaircase(activeStep)));
+        % Get response using the new intensity
+        response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
+        % End if escape has been pressed
+        if response == 99        
+            break;
+        end   
+        % Go up one step if repsonse is no
+        if response == 0        
+            activeStep = activeStep - 1;
+        end   
+        % Go up n steps if repsonse is yes
+        if response == 1        
+            activeStep = activeStep + n;
+            n = n + 1;
+        end         
+    end
     % End if escape has been pressed
     if response == 99        
         break;
-    end
-    %% Update quest function with response
+    end    
+    %% Update quest function with response and mean intensity
     % Use the intensity that has actually been used on logarithmic scale 
     % Response is binary (0 for failure, 1 for success)    
-    qpre=QuestUpdate(qpre,log10(intensity),response);    
+    q=QuestUpdate(q,log10(intensity),response);      
 end
 % Check if exit is desired
 % End if escape has been pressed
 if response == 99       
     disp('***Experiment terminated.***');
 else
-% Get preliminary estimate of threshold.
-tpreLog=QuestMean(qpre);
-tpre=max(0,min(1,10^tpreLog));
-sdpre=QuestSd(qpre);
-fprintf('Preliminary threshhold estimate (mean+-sd) is %.5f +- %.5f\n',tpre,sdpre);
-%% Set main QUEST parameters based on preliminary test
-tGuess=log10(tpre);
-tGuessSd=initialSd;
-pThreshold=0.82; beta=3.5; delta=0.01; gamma=0.5; grain=0.01; range=10;
-q=QuestCreate(tGuess,tGuessSd,pThreshold,beta,delta,gamma,grain,range);
-q.normalizePdf=1;
 %% Main QUEST procedure
 for i = 1:numberOfTrials
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
