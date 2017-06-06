@@ -1,15 +1,18 @@
 function [trialMatrix] = lf_flashSuppressionQuest()
 %%  Info section
 % ----------------------------------------------------------------------- %
-%   Author: Lucas Feldmann
+%   Author: Lucasn Feldmann
 %   Version: 0.1
 %   Date: 20170524
 %   About: Flash suppression paradigma using QUEST
 % ----------------------------------------------------------------------- %
+
 %% Clearing screen, windows, variables and command windows
 sca; close all; clear all; clc;
+
 %% Set global variables
 global window;
+
 %% Set experiment parameters
 % Side of the stimulus to appear, 0 for left, 1 for right
 side = 1;
@@ -19,11 +22,22 @@ frameImagePath = 'X:\Mitarbeiter\Chris\MatLab\CFS_Frame.jpg';
 firstStimulusImagePath = 'X:\Mitarbeiter\Max\Maxlab\ECG\Components\Stimuli\Mondrian.png';
 % Path to the image of the second stimulus (usually equals the first stimulus)
 secondStimulusImagePath = firstStimulusImagePath;
-% Path to the image of the second stimulus (e.g. Face)
-thirdStimulusImagePath = 'X:\Mitarbeiter\Chris\MatLab\RadboudFaces\radb_002_ang_f_cauc_fr.png';
+% Path to Radboud faces
+radboudPath = 'X:\Mitarbeiter\Insa\emoCfs\Diverses\Radboud Faces';
+% IDs of the Radboud faces to use
+% Female face IDs
+identityID1 = '001';
+identityID2 = '012';
+identityID3 = '014';
+identityID4 = '061';
+% Male face IDs
+identityID5 = '010';
+identityID6 = '023';
+identityID7 = '038';
+identityID8 = '071';
 % Contrast weights for the three stimuli
 % Stimulus 1
-contrastFirstStimulus = 0.8;
+contrastFirstStimulus = 1;
 % Stimulus 2 - same contrast for both Mondrian patterns
 contrastSecondStimulus = contrastFirstStimulus;
 % Stimulus 3 - will be variied in the experiment
@@ -34,9 +48,9 @@ durationFix = 1;
 durationFirstStimulus = 2;
 % Duration of the seconds stimulus in seconds
 durationSecondStimulus = 0.5;
-% Number of trials
-numberOfTrials = 50;
-% Number of early trial rounds
+% Number of trials per emotion
+numberOfTrials = 35;
+% Number of early trial rounds per emotion
 numberOfEarlyTrialRounds = 5;
 % Guess initial threshhold (numeric scale, e.g. 0.05)
 initialGuess = 0.50;
@@ -48,11 +62,15 @@ yes = 'y';
 no = 'n';
 % Key for experiment termination
 escape = 'ESCAPE';
+
 %% Initialize experiment
 % Set QUEST parameters 
 pThreshold=0.82; beta=3.5; delta=0.01; gamma=0.5; grain=0.01; range=10;
-q=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
-q.normalizePdf=1;
+% Initialize both QUEST procedures for the two emotions
+qNeu=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
+qFea=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
+qNeu.normalizePdf=1;
+qFea.normalizePdf=1;
 % Set keycodes for keys to press
 KbName('UnifyKeyNames');
 escapeKey = KbName(escape);
@@ -93,9 +111,6 @@ firstStimTex = Screen('MakeTexture', window, firstStim);
 secondStim = imread(secondStimulusImagePath);
 secondStim = (secondStim-secondStim(1)).*contrastSecondStimulus + secondStim(1);
 secondStimTex = Screen(window, 'MakeTexture',secondStim);
-% Third stimulus
-% Only read image, generate texture based on varying contrast
-thirdStim = imread(thirdStimulusImagePath);
 % Generate frame coordinates to draw images at
 [s1, s2, s3] = size(frameImage);
 baseRect = [0 0 400 400];
@@ -112,23 +127,57 @@ LeftPosition = CenterRectOnPointd(imageRect, Xlinks, yCenter);
 RightPosition = CenterRectOnPointd(imageRect, Xrechts, yCenter);
 % Set alpha blending
 Screen('BlendFunction', window, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
+
 %% Main experiment
-%% Create matrix to write repsonse and contrast into
+
+%% Create matrices to write repsonse and contrast into for each emotion
+% Get number of pre trials
+numberOfPreTrials = numberOfEarlyTrialRounds*numberOfEarlyTrialRounds+numberOfEarlyTrialRounds;
 % Get combined number of trials
-totalNumberOfTrials = numberOfTrials + ((numberOfEarlyTrialRounds*numberOfEarlyTrialRounds+numberOfEarlyTrialRounds)/2);
-% Get side conditions
-logicals = zeros(totalNumberOfTrials,1);
-logicals(1:round(totalNumberOfTrials/2)) = 1;
-logicals_shuffled = Shuffle(logicals);
-% Fill trial matrix
+totalNumberOfTrials = 2*numberOfTrials + numberOfPreTrials;
+% Get all identities per emotion and shuffle
+identityIDs = repmat((1:8), 1, floor(totalNumberOfTrials/8));
+identityIDs = [identityIDs, randi([1, 8], 1, mod(totalNumberOfTrials,8))];
+identityIDs = Shuffle(identityIDs);
+% Randomize emotion (0 = neutral, 1 = fearful)
+emotionRand = zeros(1,totalNumberOfTrials-numberOfPreTrials);
+emotionRand(1:totalNumberOfTrials/2) = 1;
+emotionRand = Shuffle(emotionRand);
+% Fill trial matrix with identities and emotions
 trialMatrix = 1:totalNumberOfTrials;
-trialMatrix(2,:) = logicals_shuffled;
+trialMatrix(2,:) = identityIDs;
+trialMatrix(3,1:numberOfPreTrials/2) = 0;
+trialMatrix(3,numberOfPreTrials/2+1:numberOfPreTrials) = 1;
+trialMatrix(3,numberOfPreTrials+1:totalNumberOfTrials) = emotionRand;
 % Set current trial number
 currentTrial = 1;
-%% Staircase procedure for the first trials to avoid quest failing due to early errors
+
+%% Create textures for each identity and emotion
+% Read all neutral faces
+identityID1neu = imread(strcat(radboudPath, '\radb_', identityID1, '_neu_f_cauc_fr.png'));
+identityID2neu = imread(strcat(radboudPath, '\radb_', identityID2, '_neu_f_cauc_fr.png'));
+identityID3neu = imread(strcat(radboudPath, '\radb_', identityID3, '_neu_f_cauc_fr.png'));
+identityID4neu = imread(strcat(radboudPath, '\radb_', identityID4, '_neu_f_cauc_fr.png'));
+identityID5neu = imread(strcat(radboudPath, '\radb_', identityID5, '_neu_m_cauc_fr.png'));
+identityID6neu = imread(strcat(radboudPath, '\radb_', identityID6, '_neu_m_cauc_fr.png'));
+identityID7neu = imread(strcat(radboudPath, '\radb_', identityID7, '_neu_m_cauc_fr.png'));
+identityID8neu = imread(strcat(radboudPath, '\radb_', identityID8, '_neu_m_cauc_fr.png'));
+% Read all fearful faces
+identityID1fea = imread(strcat(radboudPath, '\radb_', identityID1, '_fea_f_cauc_fr.png'));
+identityID2fea = imread(strcat(radboudPath, '\radb_', identityID2, '_fea_f_cauc_fr.png'));
+identityID3fea = imread(strcat(radboudPath, '\radb_', identityID3, '_fea_f_cauc_fr.png'));
+identityID4fea = imread(strcat(radboudPath, '\radb_', identityID4, '_fea_f_cauc_fr.png'));
+identityID5fea = imread(strcat(radboudPath, '\radb_', identityID5, '_fea_m_cauc_fr.png'));
+identityID6fea = imread(strcat(radboudPath, '\radb_', identityID6, '_fea_m_cauc_fr.png'));
+identityID7fea = imread(strcat(radboudPath, '\radb_', identityID7, '_fea_m_cauc_fr.png'));
+identityID8fea = imread(strcat(radboudPath, '\radb_', identityID8, '_fea_m_cauc_fr.png'));
+
+%% Staircase procedures for the first trials to avoid quest failing due to early errors
+
+%% Staircase for neutral faces
 for i=numberOfEarlyTrialRounds:-1:1
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
-    intensityLog = QuestMean(q);    
+    intensityLog = QuestMean(qNeu);    
     % Convert intenstiy to numeric scale
     intensity = 10^intensityLog;
     % Limit intensity to 0-1 range
@@ -139,17 +188,38 @@ for i=numberOfEarlyTrialRounds:-1:1
     maxSteps = (i*i+i)/2 + i;
     intensityStaircase = 1:maxSteps;
     stepGrain = intensity/maxSteps;
-    intensityStaircase = stepGrain.*(maxSteps-intensityStaircase+i)
+    intensityStaircase = stepGrain.*(maxSteps-intensityStaircase+i);
     % Set step on staircase
     activeStep = i;
     % Set count of steps (for correct answers)
     n = 1;
     for j=1:i        
         %% Experiment procure     
-        % Limit intensity to 0-1 range
-        intensity=intensityStaircase(activeStep);
+        % Get identity to display
+        identity = trialMatrix(2,currentTrial);
+        % Get the correct image for identity
+        switch identity
+            case 1
+                thirdStim = identityID1neu;
+            case 2
+                thirdStim = identityID2neu;
+            case 3
+                thirdStim = identityID3neu;
+            case 4
+                thirdStim = identityID4neu;
+            case 5
+                thirdStim = identityID5neu;
+            case 6
+                thirdStim = identityID6neu;                
+            case 7
+                thirdStim = identityID7neu;
+            case 8
+                thirdStim = identityID8neu;
+        end
+        % Get new intensity based on staircase and limit it to 0-1 range        
+        intensity=max(0,min(1,intensityStaircase(activeStep)));
         % Get response using the new intensity
-        response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, trialMatrix(2,currentTrial));
+        response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
         % End if escape has been pressed
         if response == 99        
             break;
@@ -167,8 +237,8 @@ for i=numberOfEarlyTrialRounds:-1:1
             n = n + 1;
         end 
         %% Log results
-        trialMatrix(3,currentTrial) = intensity;
-        trialMatrix(4,currentTrial) = response;
+        trialMatrix(4,currentTrial) = intensity;
+        trialMatrix(5,currentTrial) = response;
         %% Trial complete
         currentTrial = currentTrial + 1;  
     end
@@ -176,27 +246,158 @@ for i=numberOfEarlyTrialRounds:-1:1
     if response == 99        
         break;
     end    
-    %% Update quest function with response and mean intensity
+    %% Update quest function with response and intensity
     % Use the intensity that has actually been used on logarithmic scale 
     % Response is binary (0 for failure, 1 for success)    
-    q=QuestUpdate(q,log10(intensity),response);      
+    qNeu=QuestUpdate(qNeu,log10(intensity),response);      
 end
 % Check if exit is desired
 % End if escape has been pressed
 if response == 99       
     disp('***Experiment terminated.***');
 else
-%% Main QUEST procedure
-for i = 1:numberOfTrials
+    
+%% Staircase for fearful faces
+for i=numberOfEarlyTrialRounds:-1:1  
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
-    intensityLog = QuestMean(q);    
+    intensityLog = QuestMean(qFea);    
+    % Convert intenstiy to numeric scale
+    intensity = 10^intensityLog;
+    % Limit intensity to 0-1 range
+    intensity=max(0,min(1,intensity));
+    % Generate N-up-1-down staircase for suggested intensity 
+    % Maximum number of steps in lower intenstity direction are calculated by gaussian sum formula
+    % Maximum steps in higher intensity direction = i
+    maxSteps = (i*i+i)/2 + i;
+    intensityStaircase = 1:maxSteps;
+    stepGrain = intensity/maxSteps;
+    intensityStaircase = stepGrain.*(maxSteps-intensityStaircase+i);
+    % Set step on staircase
+    activeStep = i;
+    % Set count of steps (for correct answers)
+    n = 1;
+    for j=1:i        
+        %% Experiment procure
+        % Get identity to display
+        identity = trialMatrix(2,currentTrial);
+        % Get the correct image for identity
+        switch identity
+            case 1
+                thirdStim = identityID1fea;
+            case 2
+                thirdStim = identityID2fea;
+            case 3
+                thirdStim = identityID3fea;
+            case 4
+                thirdStim = identityID4fea;
+            case 5
+                thirdStim = identityID5fea;
+            case 6
+                thirdStim = identityID6fea;                
+            case 7
+                thirdStim = identityID7fea;
+            case 8
+                thirdStim = identityID8fea;
+        end
+        % Get new intensity based on staircase and limit it to 0-1 range        
+        intensity=max(0,min(1,intensityStaircase(activeStep)));
+        % Get response using the new intensity
+        response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
+        % End if escape has been pressed
+        if response == 99        
+            break;
+        end   
+        % Go up one step if repsonse is no
+        if response == 0        
+            activeStep = activeStep - 1;
+            % Reset step size
+            n = 1;
+        end   
+        % Go up n steps if repsonse is yes
+        if response == 1        
+            activeStep = activeStep + n;
+            % Increase step size
+            n = n + 1;
+        end 
+        %% Log results
+        trialMatrix(4,currentTrial) = intensity;
+        trialMatrix(5,currentTrial) = response;
+        %% Trial complete
+        currentTrial = currentTrial + 1;  
+    end
+    % End if escape has been pressed
+    if response == 99        
+        break;
+    end    
+    %% Update quest function with response and intensity
+    % Use the intensity that has actually been used on logarithmic scale 
+    % Response is binary (0 for failure, 1 for success)    
+    qFea=QuestUpdate(qFea,log10(intensity),response);      
+end
+% Check if exit is desired
+% End if escape has been pressed
+if response == 99       
+    disp('***Experiment terminated.***');
+else
+    
+%% Main QUEST procedure
+for i = 1:numberOfTrials*2
+    %% Get current emotion and identity to display
+    emotion = trialMatrix(3,currentTrial);
+    identity = trialMatrix(2,currentTrial);
+    %% Get the correct image for identity emotion combination
+    if emotion % Fearful emotion
+        switch identity
+            case 1
+                thirdStim = identityID1fea;
+            case 2
+                thirdStim = identityID2fea;
+            case 3
+                thirdStim = identityID3fea;
+            case 4
+                thirdStim = identityID4fea;
+            case 5
+                thirdStim = identityID5fea;
+            case 6
+                thirdStim = identityID6fea;                
+            case 7
+                thirdStim = identityID7fea;
+            case 8
+                thirdStim = identityID8fea;
+        end
+    else       % Neutral emotion
+        switch identity
+            case 1
+                thirdStim = identityID1neu;
+            case 2
+                thirdStim = identityID2neu;
+            case 3
+                thirdStim = identityID3neu;
+            case 4
+                thirdStim = identityID4neu;
+            case 5
+                thirdStim = identityID5neu;
+            case 6
+                thirdStim = identityID6neu;                
+            case 7
+                thirdStim = identityID7neu;
+            case 8
+                thirdStim = identityID8neu; 
+        end
+    end
+    %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994) 
+    if emotion % Fearful emotion
+        intensityLog = QuestMean(qFea);   
+    else       % Neutral emotion
+        intensityLog = QuestMean(qNeu);   
+    end      
     % Convert intenstiy to numeric scale
     intensity = 10^intensityLog;
     %% Experiment procure 
     % Limit intensity to 0-1 range    
     intensity=max(0,min(1,intensity));   
     % Get response using the new intensity    
-    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, trialMatrix(2,currentTrial));
+    response = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side);
     % End if escape has been pressed
     if response == 99      
         disp('***Experiment terminated.***');
@@ -205,20 +406,29 @@ for i = 1:numberOfTrials
     %% Update quest function with response
     % Use the intensity that has actually been used on logarithmic scale 
     % Response is binary (0 for failure, 1 for success)
-    q=QuestUpdate(q,log10(intensity),response); 
+    if emotion % Fearful emotion
+        qFea=QuestUpdate(qFea,log10(intensity),response);    
+    else       % Neutral emotion
+        qNeu=QuestUpdate(qNeu,log10(intensity),response);   
+    end    
     %% Log results
-    trialMatrix(3,currentTrial) = intensity;
-    trialMatrix(4,currentTrial) = response;
+    trialMatrix(4,currentTrial) = intensity;
+    trialMatrix(5,currentTrial) = response;
     %% Trial complete
     currentTrial = currentTrial + 1;    
 end
-% Get final estimate of threshold.
-tLog=QuestMean(q);
-t=10^tLog;
-sd=QuestSd(q);
-fprintf('Final threshhold estimate (mean+-sd) is %.5f +- %.5f\n',t,sd);
+% Get final estimate of thresholds
+tLogNeu=QuestMean(qNeu);
+tNeu=10^tLogNeu;
+sdNeu=QuestSd(qNeu);
+fprintf('Final threshhold estimate for neutral faces (mean+-sd) is %.5f +- %.5f\n', tNeu, sdNeu);
+tLogFea=QuestMean(qFea);
+tFea=10^tLogFea;
+sdFea=QuestSd(qFea);
+fprintf('Final threshhold estimate for fearful faces (mean+-sd) is %.5f +- %.5f\n', tFea, sdFea);
 end
 sca;
+end
 end
 
 function [response] = lf_showFlashSuppressionSequence(intensity, black, durationFix, durationFirstStimulus, durationSecondStimulus, frameTex, firstStimTex, secondStimTex, thirdStim, LeftPosition, RightPosition, imageRectInLeftFrame, imageRectInRightFrame, escapeKey, yesKey, noKey, side)
