@@ -1,4 +1,4 @@
-function [trialMatrix, identityContrastMatrix] = lf_flashSuppressionQuest()
+function [trialMatrix, identityContrastMatrix, qNeu, qFea] = lf_flashSuppressionQuest()
 %%  Info section
 % ----------------------------------------------------------------------- %
 %   Author: Lucasn Feldmann
@@ -80,17 +80,19 @@ elseif side == 1 % right side
     Screen('DrawTexture', window, secondStimTex, [], imageRectInLeftFrame, 0);
     Screen('DrawTexture', window, thirdStimTex, [], imageRectInRightFrame, 0);
     Screen('Flip', window);
-    WaitSecs (durationSecondStimulus);   
+    WaitSecs (durationSecondStimulus);    
     Screen(window, 'FillRect', black);
-    Screen('Flip', window);
+    Screen('Flip', window);    
 else
     disp('***Invalid side!***');
-end   
+end  
 %% Get response 
 % show message to vps to report whether they have seen the face or not
+% (todo)
+% get initial response
+[~ , ~, keyCode, ~] = KbCheck();
 % loop through keypresses until a correct key is pressed
-while 1
-    [~ , keyCode, ~] = KbWait([], 2);   
+while 1      
     if keyCode(yesKey)        
         response = 1;  
         break;
@@ -102,7 +104,8 @@ while 1
         break;
     else           
         disp('***Invalid key press.***');            
-    end   
+    end  
+    [~ , keyCode, ~] = KbWait([], 2); 
 end
 end
 function [thirdStim] = lf_getThirdStim()
@@ -161,7 +164,7 @@ end
 
 %% Set experiment parameters
 % Side of the stimulus to appear, 0 for left, 1 for right
-side = 1;
+side = 0;
 % Path to the frame image
 frameImagePath = 'X:\Mitarbeiter\Chris\MatLab\CFS_Frame.jpg';
 % Path to the image of the first stimulus (e.g. Mondrian)
@@ -211,7 +214,7 @@ escape = 'ESCAPE';
 
 %% Initialize experiment
 % Set QUEST parameters 
-pThreshold=0.82; beta=3.5; delta=0.01; gamma=0.5; grain=0.01; range=10;
+pThreshold=0.82; beta=3.5; delta=0.01; gamma=0.0; grain=0.01; range=10;
 % Initialize both QUEST procedures for the two emotions
 qNeu=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
 qFea=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
@@ -487,6 +490,7 @@ for i = 1:numberOfTrials*2
 end
 end
 end
+sca;
 %% Get final estimate of thresholds
 tLogNeu=QuestMean(qNeu);
 tNeu=10^tLogNeu;
@@ -515,5 +519,4 @@ for i = 1:8
     fprintf('Final threshhold estimate for identity %.5f (mean+-sd) is %.5f +- %.5f\n', i, t, sd);
     identityContrastMatrix(1,i) = t;
 end
-sca;
 end
