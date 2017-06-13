@@ -11,6 +11,7 @@ function [trialMatrix, identityContrastMatrix, qNeu, qFea, tNeu, sdNeu, tFea, sd
 sca; close all; clear all; clc;
 
 %% Set global variables
+% no global variables defined
 
 %% Define nested functions here
 function [response] = lf_showFlashSuppressionSequence()
@@ -83,10 +84,8 @@ end
 %% Show message to report response
 WaitSecs (durationSecondStimulus);   
 Screen(window, 'FillRect', black);
-Screen(window, 'DrawText', 'Bitte geben Sie nun an, ob sie die gezeigte Emotion erkennen konnten.', 50, yCenter-30, 100);    
-Screen(window, 'DrawText', 'Bitte geben Sie nun an, ob sie die gezeigte Emotion erkennen konnten.', xCenter+50, yCenter-30, 100); 
-Screen(window, 'DrawText', 'Y falls ja. N falls nein. Escape zum Abbrechen.', 50, yCenter, 100);    
-Screen(window, 'DrawText', 'Y falls ja. N falls nein. Escape zum Abbrechen.', xCenter+50, yCenter, 100);   
+DrawFormattedText(window, 'Bitte geben Sie nun an, ob sie die gezeigte Emotion erkennen konnten.\n''Y'' falls ja. ''N'' falls nein. ''Escape'' zum Abbrechen.', 'center', 'center', 100, [], [], [], 2, [], LeftPosition);
+DrawFormattedText(window, 'Bitte geben Sie nun an, ob sie die gezeigte Emotion erkennen konnten.\n''Y'' falls ja. ''N'' falls nein. ''Escape'' zum Abbrechen.', 'center', 'center', 100, [], [], [], 2, [], RightPosition);
 Screen('Flip', window);
 response = lf_getResponse();
 end
@@ -215,14 +214,15 @@ no = 'n';
 % Key for experiment termination
 escape = 'ESCAPE';
 
-%% Initialize experiment
-% Set QUEST parameters 
+%% Set QUEST parameters 
 pThreshold=0.82; beta=3.5; delta=0.01; gamma=0.0; grain=0.01; range=10;
 % Initialize both QUEST procedures for the two emotions
 qNeu=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
 qFea=QuestCreate(initialGuess,initialSd,pThreshold,beta,delta,gamma,grain,range);
 qNeu.normalizePdf=1;
 qFea.normalizePdf=1;
+
+%% Initialize experiment
 % Set keycodes for keys to press
 KbName('UnifyKeyNames');
 escapeKey = KbName(escape);
@@ -238,19 +238,10 @@ black = BlackIndex(screenNumber);
 % Open an on screen window
 [window, windowRect] = PsychImaging('OpenWindow', screenNumber, black);
 % Set text size
-Screen('TextSize', window , 16);
+Screen('TextSize', window , 15);
 Screen('TextFont', window, 'Arial');
 % Get the centre coordinate of the window
 [xCenter, yCenter] = RectCenter(windowRect);
-% Show first instructions
-Screen(window, 'FillRect', black);
-% Text on left side
-Screen(window, 'DrawText', 'Falls Sie die Instruktionen verstanden haben, beginnen Sie nun', 50, yCenter-30, 100); 
-Screen(window, 'DrawText', 'bitte die Probedurchgänge mit Y. Escape zum Abbrechen.', 50, yCenter, 100); 
-% Text on right side
-Screen(window, 'DrawText', 'Falls Sie die Instruktionen verstanden haben, beginnen Sie nun', xCenter+50, yCenter-30, 100); 
-Screen(window, 'DrawText', 'bitte die Probedurchgänge mit Y. Escape zum Abbrechen.', xCenter+50, yCenter, 100);  
-Screen('Flip', window);
 % Create image textures 
 % Frame
 frameImage = imread(frameImagePath);
@@ -281,7 +272,7 @@ LeftPosition = CenterRectOnPointd(imageRect, Xlinks, yCenter);
 RightPosition = CenterRectOnPointd(imageRect, Xrechts, yCenter);
 % Set alpha blending
 Screen('BlendFunction', window, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
-%% Create textures for each identity and emotion
+% Create textures for each identity and emotion
 % Read all neutral faces
 identityID1neu = imread(strcat(radboudPath, '\radb_', identityID1, '_neu_f_cauc_fr.png'));
 identityID2neu = imread(strcat(radboudPath, '\radb_', identityID2, '_neu_f_cauc_fr.png'));
@@ -301,10 +292,17 @@ identityID6fea = imread(strcat(radboudPath, '\radb_', identityID6, '_fea_m_cauc_
 identityID7fea = imread(strcat(radboudPath, '\radb_', identityID7, '_fea_m_cauc_fr.png'));
 identityID8fea = imread(strcat(radboudPath, '\radb_', identityID8, '_fea_m_cauc_fr.png'));
 
-%% Get response
+%% Show first instructions
+Screen(window, 'FillRect', black);
+DrawFormattedText(window, 'Falls Sie die Instruktionen verstanden haben, beginnen Sie nun\nbitte die Probedurchgänge mit ''Y''. ''Escape'' zum Abbrechen.', 'center', 'center', 100, [], [], [], 2, [], LeftPosition);
+DrawFormattedText(window, 'Falls Sie die Instruktionen verstanden haben, beginnen Sie nun\nbitte die Probedurchgänge mit ''Y''. ''Escape'' zum Abbrechen.', 'center', 'center', 100, [], [], [], 2, [], RightPosition);
+Screen('Flip', window);
+% Get response
 response = lf_getResponse();
-%% Demo trials
+
+%% Experiment execution
 if response ~= 99
+%% Demo Trials
 identity = 1;
 emotion = 0;
 intensity = 1;
@@ -319,19 +317,15 @@ end
 if response ~= 99
 % Show start instructions
 Screen(window, 'FillRect', black);
-% Text on left side
-Screen(window, 'DrawText', 'Beginnen Sie nun das Experiment mit Taste Y.', 50, yCenter-30, 100); 
-Screen(window, 'DrawText', 'Sie können jederzeit mit Escape abbrechen.', 50, yCenter, 100); 
-% Text on right side
-Screen(window, 'DrawText', 'Beginnen Sie nun das Experiment mit Taste Y.', xCenter+50, yCenter-30, 100); 
-Screen(window, 'DrawText', 'Sie können jederzeit mit Escape abbrechen.', xCenter+50, yCenter, 100);  
+DrawFormattedText(window, 'Beginnen Sie nun das Experiment mit Taste ''Y''.\nSie können jederzeit mit ''Escape'' abbrechen.', 'center', 'center', 100, [], [], [], 2, [], LeftPosition);
+DrawFormattedText(window, 'Beginnen Sie nun das Experiment mit Taste ''Y''.\nSie können jederzeit mit ''Escape'' abbrechen.', 'center', 'center', 100, [], [], [], 2, [], RightPosition);
 Screen('Flip', window);
-%% Get response
+% Get response
 response = lf_getResponse();
 if response ~= 99    
 %% Main experiment
 
-%% Create matrices to write repsonse and contrast into for each emotion
+% Create matrices to write repsonse and contrast into for each emotion
 % Get number of pre trials
 numberOfPreTrials = numberOfEarlyTrialRounds*3;
 % Get combined number of trials
@@ -352,10 +346,8 @@ trialMatrix(3,numberOfPreTrials+1:numberOfPreTrials) = 1;
 trialMatrix(3,numberOfPreTrials*2+1:totalNumberOfTrials) = emotionRand;
 % Set current trial number
 currentTrial = 1;
-
 %% Procedures for the first trials to avoid quest failing due to early errors
-
-%% Neutral faces
+% Neutral faces
 emotion=0;
 for i = 1:numberOfEarlyTrialRounds
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
@@ -415,7 +407,7 @@ if response == 99
     disp('***Experiment terminated.***');
 else
     
-%% Fearful faces
+% Fearful faces
 emotion=1;
 for i = 1:numberOfEarlyTrialRounds
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
@@ -519,6 +511,7 @@ end
 end
 end
 sca;
+
 %% Get final estimate of thresholds
 tLogNeu=QuestMean(qNeu);
 tNeu=10^tLogNeu;
@@ -528,6 +521,7 @@ tLogFea=QuestMean(qFea);
 tFea=10^tLogFea;
 sdFea=QuestSd(qFea);
 fprintf('Final threshhold estimate for fearful faces (mean+-sd) is %.5f +- %.5f\n', tFea, sdFea);
+
 %% Evalate differences betweeen faces 
 if response ~= 99   
 % Group all faces based on identity and calculate quest threshhold guess for each
