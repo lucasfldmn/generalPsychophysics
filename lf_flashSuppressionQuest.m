@@ -1,9 +1,9 @@
-function [trialMatrix, identityContrastMatrix, qNeu, qFea] = lf_flashSuppressionQuest()
+function [trialMatrix, identityContrastMatrix, qNeu, qFea, tNeu, sdNeu, tFea, sdFea] = lf_flashSuppressionQuest()
 %%  Info section
 % ----------------------------------------------------------------------- %
-%   Author: Lucasn Feldmann
-%   Version: 0.1
-%   Date: 20170524
+%   Author: Lucas Feldmann
+%   Version: 0.6
+%   Date: 20170613
 %   About: Flash suppression paradigma using QUEST
 % ----------------------------------------------------------------------- %
 
@@ -186,7 +186,7 @@ identityID7 = '038';
 identityID8 = '071';
 % Contrast weights for the three stimuli
 % Stimulus 1
-contrastFirstStimulus = 1;
+contrastFirstStimulus = 0.5;
 % Stimulus 2 - same contrast for both Mondrian patterns
 contrastSecondStimulus = contrastFirstStimulus;
 % Stimulus 3 - will be variied in the experiment
@@ -199,7 +199,7 @@ durationFirstStimulus = 2;
 durationSecondStimulus = 0.5;
 % Number of trials per emotion
 numberOfTrials = 35;
-% Number of early trial rounds per emotion
+% Number of early trial rounds per emotion (3 trials per round)
 numberOfEarlyTrialRounds = 5;
 % Guess initial threshhold (numeric scale, e.g. 0.05)
 initialGuess = 0.50;
@@ -275,23 +275,23 @@ Screen('BlendFunction', window, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 
 %% Create matrices to write repsonse and contrast into for each emotion
 % Get number of pre trials
-numberOfPreTrials = numberOfEarlyTrialRounds*numberOfEarlyTrialRounds+numberOfEarlyTrialRounds;
+numberOfPreTrials = numberOfEarlyTrialRounds*3;
 % Get combined number of trials
-totalNumberOfTrials = 2*numberOfTrials + numberOfPreTrials;
+totalNumberOfTrials = 2*numberOfTrials + 2*numberOfPreTrials;
 % Get all identities per emotion and shuffle
 identityIDs = repmat((1:8), 1, floor(totalNumberOfTrials/8));
 identityIDs = [identityIDs, randi([1, 8], 1, mod(totalNumberOfTrials,8))];
 identityIDs = Shuffle(identityIDs);
 % Randomize emotion (0 = neutral, 1 = fearful)
-emotionRand = zeros(1,totalNumberOfTrials-numberOfPreTrials);
+emotionRand = zeros(1,totalNumberOfTrials - 2*numberOfPreTrials);
 emotionRand(1:totalNumberOfTrials/2) = 1;
 emotionRand = Shuffle(emotionRand);
 % Fill trial matrix with identities and emotions
 trialMatrix = 1:totalNumberOfTrials;
 trialMatrix(2,:) = identityIDs;
-trialMatrix(3,1:numberOfPreTrials/2) = 0;
-trialMatrix(3,numberOfPreTrials/2+1:numberOfPreTrials) = 1;
-trialMatrix(3,numberOfPreTrials+1:totalNumberOfTrials) = emotionRand;
+trialMatrix(3,1:numberOfPreTrials) = 0;
+trialMatrix(3,numberOfPreTrials+1:numberOfPreTrials) = 1;
+trialMatrix(3,numberOfPreTrials*2+1:totalNumberOfTrials) = emotionRand;
 % Set current trial number
 currentTrial = 1;
 
@@ -319,50 +319,37 @@ identityID8fea = imread(strcat(radboudPath, '\radb_', identityID8, '_fea_m_cauc_
 
 %% Staircase for neutral faces
 emotion=0;
-for i=numberOfEarlyTrialRounds:-1:1
+for i = 1:numberOfEarlyTrialRounds
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
     intensityLog = QuestMean(qNeu);    
     % Convert intenstiy to numeric scale
     intensity = 10^intensityLog;
     % Limit intensity to 0-1 range
     intensity=max(0,min(1,intensity));
-    % Generate N-up-1-down staircase for suggested intensity 
-    % Maximum number of steps in lower intenstity direction are calculated by gaussian sum formula
-    % Maximum steps in higher intensity direction = i
-    maxSteps = (i*i+i)/2 + i;
-    intensityStaircase = 1:maxSteps;
-    stepGrain = intensity/maxSteps;
-    intensityStaircase = stepGrain.*(maxSteps-intensityStaircase+i);
-    % Set step on staircase
-    activeStep = i;
-    % Set count of steps (for correct answers)
-    n = 1;
-    for j=1:i        
+    %% Show stimulus 3 times, get most frequent response   
+    % Reset response count
+    countFalse = 0;
+    countTrue = 0;
+    for j = 1:3       
         %% Experiment procure     
         % Get identity to display
         identity = trialMatrix(2,currentTrial);        
         % Get the correct image for identity
-        thirdStim = lf_getThirdStim();
-        % Get new intensity based on staircase and limit it to 0-1 range        
-        intensity=max(0,min(1,intensityStaircase(activeStep)));
+        thirdStim = lf_getThirdStim();       
         % Get response using the new intensity
         response = lf_showFlashSuppressionSequence();
         % End if escape has been pressed
         if response == 99        
             break;
         end   
-        % Go up one step if repsonse is no
+        % Count false answers
         if response == 0        
-            activeStep = activeStep - 1;
-            % Reset step size
-            n = 1;
+            countFalse = countFalse + 1;
         end   
-        % Go up n steps if repsonse is yes
-        if response == 1        
-            activeStep = activeStep + n;
-            % Increase step size
-            n = n + 1;
-        end 
+        % Count correct answers
+        if response == 1             
+            countTrue = countTrue + 1;
+        end                    
         %% Log results
         trialMatrix(4,currentTrial) = intensity;
         trialMatrix(5,currentTrial) = response;
@@ -372,7 +359,13 @@ for i=numberOfEarlyTrialRounds:-1:1
     % End if escape has been pressed
     if response == 99        
         break;
-    end    
+    end   
+    % Get most frequent response
+    if countTrue > countFalse
+        response = 1;
+    else
+        response = 0;    
+    end
     %% Update quest function with response and intensity
     % Use the intensity that has actually been used on logarithmic scale 
     % Response is binary (0 for failure, 1 for success)    
@@ -386,50 +379,37 @@ else
     
 %% Staircase for fearful faces
 emotion=1;
-for i=numberOfEarlyTrialRounds:-1:1  
+for i = 1:numberOfEarlyTrialRounds
     %% Set new test intensity using QuestMean as recommended by King-Smith et al. (1994)
     intensityLog = QuestMean(qFea);    
     % Convert intenstiy to numeric scale
     intensity = 10^intensityLog;
     % Limit intensity to 0-1 range
     intensity=max(0,min(1,intensity));
-    % Generate N-up-1-down staircase for suggested intensity 
-    % Maximum number of steps in lower intenstity direction are calculated by gaussian sum formula
-    % Maximum steps in higher intensity direction = i
-    maxSteps = (i*i+i)/2 + i;
-    intensityStaircase = 1:maxSteps;
-    stepGrain = intensity/maxSteps;
-    intensityStaircase = stepGrain.*(maxSteps-intensityStaircase+i);
-    % Set step on staircase
-    activeStep = i;
-    % Set count of steps (for correct answers)
-    n = 1;
-    for j=1:i        
-        %% Experiment procure
+    %% Show stimulus 3 times, get most frequent response   
+    % Reset response count
+    countFalse = 0;
+    countTrue = 0;
+    for j = 1:3       
+        %% Experiment procure     
         % Get identity to display
-        identity = trialMatrix(2,currentTrial);
+        identity = trialMatrix(2,currentTrial);        
         % Get the correct image for identity
-        thirdStim = lf_getThirdStim();
-        % Get new intensity based on staircase and limit it to 0-1 range        
-        intensity=max(0,min(1,intensityStaircase(activeStep)));
+        thirdStim = lf_getThirdStim();       
         % Get response using the new intensity
         response = lf_showFlashSuppressionSequence();
         % End if escape has been pressed
         if response == 99        
             break;
         end   
-        % Go up one step if repsonse is no
+        % Count false answers
         if response == 0        
-            activeStep = activeStep - 1;
-            % Reset step size
-            n = 1;
+            countFalse = countFalse + 1;
         end   
-        % Go up n steps if repsonse is yes
-        if response == 1        
-            activeStep = activeStep + n;
-            % Increase step size
-            n = n + 1;
-        end 
+        % Count correct answers
+        if response == 1             
+            countTrue = countTrue + 1;
+        end                    
         %% Log results
         trialMatrix(4,currentTrial) = intensity;
         trialMatrix(5,currentTrial) = response;
@@ -439,7 +419,13 @@ for i=numberOfEarlyTrialRounds:-1:1
     % End if escape has been pressed
     if response == 99        
         break;
-    end    
+    end   
+    % Get most frequent response
+    if countTrue > countFalse
+        response = 1;
+    else
+        response = 0;    
+    end
     %% Update quest function with response and intensity
     % Use the intensity that has actually been used on logarithmic scale 
     % Response is binary (0 for failure, 1 for success)    
@@ -449,7 +435,8 @@ end
 % End if escape has been pressed
 if response == 99       
     disp('***Experiment terminated.***');
-else    
+else  
+    
 %% Main QUEST procedure
 for i = 1:numberOfTrials*2
     %% Get current emotion and identity to display
